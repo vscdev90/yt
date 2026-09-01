@@ -1,3 +1,3 @@
 @echo off
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\yt-music\yt.ps1" %*
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0yt.ps1" %*

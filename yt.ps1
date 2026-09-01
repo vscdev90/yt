@@ -2,10 +2,18 @@
 # yt-music
 # ============================================================
 
-$MpV = "C:\yt-music\mpv\mpv.exe"
-$YtDlp = "C:\Users\anne_\AppData\Local\Microsoft\WinGet\Links\yt-dlp.exe"
+$BaseDir = $PSScriptRoot
 
-$BaseDir = "C:\yt-music"
+$MpV = Join-Path $BaseDir "mpv\mpv.exe"
+
+$YtDlpCommand = Get-Command yt-dlp -ErrorAction SilentlyContinue
+
+if ($YtDlpCommand) {
+    $YtDlp = $YtDlpCommand.Source
+}
+else {
+    $YtDlp = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links\yt-dlp.exe"
+}
 
 $StateFile = "$env:TEMP\yt-music-state.json"
 $PidFile   = "$env:TEMP\yt-music-mpv.pid"
@@ -20,12 +28,14 @@ $PipeName = "yt-mpv"
 if (!(Test-Path $MpV)) {
     Write-Host "MPV niet gevonden:" -ForegroundColor Red
     Write-Host $MpV
+    Write-Host "Voer setup.ps1 uit om mpv uit te pakken." -ForegroundColor Yellow
     exit 1
 }
 
 if (!(Test-Path $YtDlp)) {
     Write-Host "yt-dlp niet gevonden:" -ForegroundColor Red
     Write-Host $YtDlp
+    Write-Host "Voer setup.ps1 uit om yt-dlp te installeren." -ForegroundColor Yellow
     exit 1
 }
 
@@ -197,12 +207,6 @@ function Send-Mpv($Command) {
 
         $writer.AutoFlush = $true
 
-        # MPV IPC verwacht:
-        #
-        # {
-        #   "command": ["cycle", "pause"]
-        # }
-        #
         $message = @{
             command = @($Command)
         }
@@ -444,12 +448,55 @@ if ($args.Count -eq 0) {
     Write-Host "  yt pause"
     Write-Host "  yt stop"
     Write-Host "  yt loop"
+    Write-Host "  yt hide"
     Write-Host ""
 
     exit
 }
 
 $command = $args[0].ToLower()
+
+# ============================================================
+# HIDE
+# ============================================================
+
+if ($command -eq "hide") {
+
+    $cmdPid = Get-ParentCmdPid
+
+    if (!$cmdPid) {
+        Write-Host "CMD-venster kon niet worden gevonden." -ForegroundColor Red
+        exit 1
+    }
+
+    $hideScript = Join-Path $BaseDir "yt-hide.ps1"
+
+    if (!(Test-Path $hideScript)) {
+        Write-Host "yt-hide.ps1 niet gevonden." -ForegroundColor Red
+        exit 1
+    }
+
+    $cmdPid | Set-Content $CmdPidFile
+
+    Start-Process `
+        -FilePath "powershell.exe" `
+        -ArgumentList @(
+            "-NoProfile"
+            "-NonInteractive"
+            "-ExecutionPolicy"
+            "Bypass"
+            "-WindowStyle"
+            "Hidden"
+            "-File"
+            $hideScript
+            "-CmdPid"
+            $cmdPid
+        ) `
+        -WindowStyle Hidden `
+        -WorkingDirectory $BaseDir | Out-Null
+
+    exit
+}
 
 # ============================================================
 # WATCHDOG
