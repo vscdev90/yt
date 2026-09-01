@@ -462,10 +462,26 @@ $command = $args[0].ToLower()
 
 if ($command -eq "hide") {
 
-    $cmdPid = Get-ParentCmdPid
+    # Het venster waarin je "yt hide" typt en op Enter drukt, is op
+    # dat moment altijd het voorgrondvenster. Dat is betrouwbaarder
+    # dan via de procesboom zoeken (die PID's kloppen niet altijd
+    # meer bij Windows Terminal/ConPTY).
 
-    if (!$cmdPid) {
-        Write-Host "CMD-venster kon niet worden gevonden." -ForegroundColor Red
+    Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class YtForegroundWindow {
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+}
+"@
+
+    $targetHandle = [YtForegroundWindow]::GetForegroundWindow()
+
+    if ($targetHandle -eq [IntPtr]::Zero) {
+        Write-Host "Actief venster kon niet worden gevonden." -ForegroundColor Red
         exit 1
     }
 
@@ -476,7 +492,15 @@ if ($command -eq "hide") {
         exit 1
     }
 
-    $cmdPid | Set-Content $CmdPidFile
+    # Een vorige "yt hide"-sessie stoppen, anders houdt die de
+    # Ctrl+H hotkey vast en faalt de nieuwe registratie stilletjes.
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
+        Where-Object {
+            $_.CommandLine -and $_.CommandLine -like "*yt-hide.ps1*"
+        } |
+        ForEach-Object {
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        }
 
     Start-Process `
         -FilePath "powershell.exe" `
@@ -489,8 +513,8 @@ if ($command -eq "hide") {
             "Hidden"
             "-File"
             $hideScript
-            "-CmdPid"
-            $cmdPid
+            "-Handle"
+            $targetHandle.ToInt64()
         ) `
         -WindowStyle Hidden `
         -WorkingDirectory $BaseDir | Out-Null

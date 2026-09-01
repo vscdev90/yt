@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [int]$CmdPid
+    [long]$Handle
 )
 
 Add-Type @"
@@ -65,16 +65,10 @@ $WM_HOTKEY = 0x0312
 $HOTKEY_ID = 12345
 
 # ============================================================
-# CMD
+# VENSTER
 # ============================================================
 
-$cmd = Get-Process -Id $CmdPid -ErrorAction SilentlyContinue
-
-if (!$cmd) {
-    exit
-}
-
-$hwnd = $cmd.MainWindowHandle
+$hwnd = [IntPtr]$Handle
 
 if ($hwnd -eq [IntPtr]::Zero) {
     exit
